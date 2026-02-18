@@ -1,0 +1,18 @@
+{
+  "name": "@buzzbd/plugin-solcex-bd",
+  "version": "1.0.0",
+  "description": "SolCex Exchange BD plugin for ElizaOS — token discovery, 100-point scoring engine, wallet forensics via Helius, and listing pipeline management",
+  "agentConfig": {
+    "pluginType": "elizaos:plugin:1.0.0",
+    "pluginParameters": {
+      "HELIUS_API_KEY": {
+        "type": "string",
+        "description": "Helius API key for Solana wallet forensics"
+      },
+      "SOLCEX_LISTING_WEBHOOK": {
+        "type": "string",
+        "description": "Webhook URL for listing inquiry submissions"
+      }
+    }
+  }
+}
