@@ -1,0 +1,47 @@
+{
+  "name": "@elizaos/plugin-solcex-bd",
+  "version": "1.0.0",
+  "description": "SolCex Exchange BD plugin — token discovery, 100-point scoring, wallet forensics, and listing pipeline for ElizaOS agents",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "elizaos",
+    "plugin",
+    "solcex",
+    "crypto",
+    "business-development",
+    "token-scoring",
+    "wallet-forensics",
+    "dexscreener",
+    "helius",
+    "solana",
+    "erc-8004",
+    "x402",
+    "autonomous-agent"
+  ],
+  "author": "SolCex Exchange <buzzbysolcex@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/buzzbysolcex/plugin-solcex-bd.git"
+  },
+  "homepage": "https://github.com/buzzbysolcex/plugin-solcex-bd#readme",
+  "dependencies": {
+    "@elizaos/core": "latest"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "tsup": "^8.3.0",
+    "@types/node": "^20.0.0"
+  },
+  "peerDependencies": {
+    "@elizaos/core": ">=0.1.0"
+  }
+}
