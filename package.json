@@ -1,6 +1,6 @@
 {
   "name": "@buzzbd/plugin-solcex-bd",
-  "version": "0.2.0",
+  "version": "2.0.0",
   "description": "Autonomous BD agent plugin for elizaOS — token discovery, scoring, wallet forensics, and listing pipeline powered by SolCex Exchange",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -28,7 +28,7 @@
     "test": "bun test",
     "test:e2e": "bun test src/__tests__/e2e",
     "lint": "tsc --noEmit",
-    "prepublishOnly": "bun run build"
+    "prepublishOnly": "npx tsup"
   },
   "dependencies": {
     "@elizaos/core": "^1.0.0"

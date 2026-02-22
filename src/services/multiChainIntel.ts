@@ -117,7 +117,7 @@ export class MultiChainIntelService {
         return profile;
       }
 
-      const data = await response.json();
+      const data = await response.json() as any;
 
       // Parse chain activity
       if (data.chains) {
@@ -205,7 +205,7 @@ export class MultiChainIntelService {
 
       if (!response.ok) return presences;
 
-      const data = await response.json();
+      const data = await response.json() as any;
       const pairs = data.pairs || [];
 
       // Group by chain, take best pair per chain

@@ -57,7 +57,7 @@ export class WalletForensicsService {
         `${this.heliusBaseUrl}/addresses/${address}/balances?api-key=${this.heliusApiKey}`
       );
       if (balanceResponse.ok) {
-        const balanceData = await balanceResponse.json();
+        const balanceData: any = await balanceResponse.json() as any;
         result.balanceSol = (balanceData.nativeBalance || 0) / 1e9;
         result.tokenAccounts = balanceData.tokens?.length || 0;
 
@@ -80,7 +80,7 @@ export class WalletForensicsService {
         `${this.heliusBaseUrl}/addresses/${address}/transactions?api-key=${this.heliusApiKey}&limit=100`
       );
       if (txResponse.ok) {
-        const txData = await txResponse.json();
+        const txData: any = await txResponse.json() as any;
         result.transactionCount = txData.length || 0;
 
         if (txData.length > 0) {

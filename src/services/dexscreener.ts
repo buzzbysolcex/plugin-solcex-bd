@@ -68,7 +68,7 @@ export class DexScreenerService {
     try {
       const response = await fetch(`${this.baseUrl}/latest/dex/search?q=${encodeURIComponent(query)}`);
       if (!response.ok) throw new Error(`DexScreener API error: ${response.status}`);
-      const data = await response.json();
+      const data = await response.json() as any;
       return data.pairs || [];
     } catch (error) {
       console.error('[Buzz/DexScreener] Failed to search pairs:', error);
@@ -84,7 +84,7 @@ export class DexScreenerService {
       const addresses = pairAddresses.join(',');
       const response = await fetch(`${this.baseUrl}/latest/dex/pairs/${chainId}/${addresses}`);
       if (!response.ok) throw new Error(`DexScreener API error: ${response.status}`);
-      const data = await response.json();
+      const data = await response.json() as any;
       return data.pairs || [];
     } catch (error) {
       console.error('[Buzz/DexScreener] Failed to fetch pairs by chain:', error);

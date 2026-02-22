@@ -142,7 +142,7 @@ export class SocialIntelService {
 
       if (!response.ok) return result;
 
-      const data = await response.json();
+      const data = await response.json() as any;
       const content = data.choices?.[0]?.message?.content || '';
 
       // Parse JSON response from Grok
@@ -210,7 +210,7 @@ export class SocialIntelService {
         return identity;
       }
 
-      const data = await response.json();
+      const data = await response.json() as any;
 
       // Parse identity fields
       identity.ensName = data.ens || data.ensName || undefined;
@@ -287,7 +287,7 @@ export class SocialIntelService {
 
       if (!response.ok) return result;
 
-      const data = await response.json();
+      const data = await response.json() as any;
       const organic = data.organic || [];
 
       result.results = organic.map((r: any) => ({
