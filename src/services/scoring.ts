@@ -1,389 +1,183 @@
-// ============================================================
-// SolCex 100-Point Scoring Engine
-// 6 weighted factors + catalyst adjustments + wallet forensics
-// Production-tested by Buzz BD Agent since Jan 2026
-// ============================================================
-
-import type {
-  DexPair,
-  TokenScore,
-  ScoreBreakdown,
-  ScoreAction,
-  CatalystAdjustment,
-  WalletForensicsResult,
-} from "../types/index.js";
-import { getTokenAgeDays, countSocials } from "./dexscreener.js";
-
-// --- Weight Configuration ---
-
-const WEIGHTS = {
-  liquidity: 25,
-  marketCap: 20,
-  volume24h: 20,
-  social: 15,
-  age: 10,
-  team: 10,
-} as const;
-
-// --- Individual Factor Scoring ---
-
-function scoreLiquidity(pair: DexPair): ScoreBreakdown {
-  const usd = pair.liquidity?.usd ?? 0;
-  let score = 0;
-  let details = "";
-
-  if (usd >= 500_000) {
-    score = 25;
-    details = "Excellent liquidity";
-  } else if (usd >= 200_000) {
-    score = 20;
-    details = "Good liquidity";
-  } else if (usd >= 100_000) {
-    score = 15;
-    details = "Acceptable liquidity";
-  } else if (usd >= 50_000) {
-    score = 10;
-    details = "Low liquidity — higher risk";
-  } else {
-    score = 5;
-    details = "Very low liquidity — caution";
-  }
-
-  return {
-    category: "Liquidity",
-    weight: WEIGHTS.liquidity,
-    score,
-    maxScore: 25,
-    value: `$${usd.toLocaleString()}`,
-    details,
-  };
-}
-
-function scoreMarketCap(pair: DexPair): ScoreBreakdown {
-  const mcap = pair.marketCap ?? pair.fdv ?? 0;
-  let score = 0;
-  let details = "";
-
-  if (mcap >= 10_000_000) {
-    score = 20;
-    details = "Strong market cap";
-  } else if (mcap >= 1_000_000) {
-    score = 16;
-    details = "Good market cap";
-  } else if (mcap >= 500_000) {
-    score = 12;
-    details = "Acceptable market cap";
-  } else if (mcap >= 100_000) {
-    score = 8;
-    details = "Small cap — early stage";
-  } else {
-    score = 4;
-    details = "Micro cap — high risk";
-  }
-
-  return {
-    category: "Market Cap",
-    weight: WEIGHTS.marketCap,
-    score,
-    maxScore: 20,
-    value: `$${mcap.toLocaleString()}`,
-    details,
-  };
-}
-
-function scoreVolume(pair: DexPair): ScoreBreakdown {
-  const vol = pair.volume?.h24 ?? 0;
-  let score = 0;
-  let details = "";
-
-  if (vol >= 1_000_000) {
-    score = 20;
-    details = "Excellent volume";
-  } else if (vol >= 500_000) {
-    score = 16;
-    details = "Good volume";
-  } else if (vol >= 100_000) {
-    score = 12;
-    details = "Moderate volume";
-  } else if (vol >= 50_000) {
-    score = 8;
-    details = "Low volume";
-  } else {
-    score = 4;
-    details = "Very low volume";
-  }
-
-  return {
-    category: "Volume 24h",
-    weight: WEIGHTS.volume24h,
-    score,
-    maxScore: 20,
-    value: `$${vol.toLocaleString()}`,
-    details,
-  };
-}
-
-function scoreSocial(pair: DexPair): ScoreBreakdown {
-  const platforms = countSocials(pair);
-  let score = 0;
-  let details = "";
-
-  if (platforms >= 4) {
-    score = 15;
-    details = `${platforms} platforms — strong presence`;
-  } else if (platforms >= 2) {
-    score = 10;
-    details = `${platforms} platforms — moderate presence`;
-  } else if (platforms >= 1) {
-    score = 6;
-    details = `${platforms} platform — minimal presence`;
-  } else {
-    score = 2;
-    details = "No social links found";
-  }
-
-  return {
-    category: "Social",
-    weight: WEIGHTS.social,
-    score,
-    maxScore: 15,
-    value: `${platforms} platforms`,
-    details,
-  };
-}
-
-function scoreAge(pair: DexPair): ScoreBreakdown {
-  const days = getTokenAgeDays(pair);
-  let score = 0;
-  let details = "";
-
-  if (days > 180) {
-    score = 10;
-    details = `${days} days — established`;
-  } else if (days > 30) {
-    score = 8;
-    details = `${days} days — moderate history`;
-  } else if (days > 7) {
-    score = 5;
-    details = `${days} days — new`;
-  } else if (days >= 0) {
-    score = 3;
-    details = `${days} days — very new, higher risk`;
-  } else {
-    score = 2;
-    details = "Age unknown";
-  }
-
-  return {
-    category: "Age",
-    weight: WEIGHTS.age,
-    score,
-    maxScore: 10,
-    value: days >= 0 ? `${days} days` : "Unknown",
-    details,
-  };
-}
-
-function scoreTeam(pair: DexPair): ScoreBreakdown {
-  // Heuristic: if they have websites + multiple socials, likely more transparent
-  const websites = pair.info?.websites?.length ?? 0;
-  const socials = pair.info?.socials?.length ?? 0;
-  let score = 0;
-  let details = "";
-
-  if (websites >= 1 && socials >= 2) {
-    score = 10;
-    details = "Website + multiple socials — good transparency";
-  } else if (websites >= 1 || socials >= 2) {
-    score = 7;
-    details = "Some online presence";
-  } else if (socials >= 1) {
-    score = 4;
-    details = "Minimal online presence";
-  } else {
-    score = 2;
-    details = "No verifiable team info";
-  }
-
-  return {
-    category: "Team Transparency",
-    weight: WEIGHTS.team,
-    score,
-    maxScore: 10,
-    value: `${websites} sites, ${socials} socials`,
-    details,
-  };
-}
-
-// --- Catalyst Detection ---
-
-function detectCatalysts(pair: DexPair): CatalystAdjustment[] {
-  const catalysts: CatalystAdjustment[] = [];
-  const vol24h = pair.volume?.h24 ?? 0;
-  const vol6h = pair.volume?.h6 ?? 0;
-  const priceChange = pair.priceChange?.h24 ?? 0;
-  const buys24h = pair.txns?.h24?.buys ?? 0;
-  const sells24h = pair.txns?.h24?.sells ?? 0;
-  const socials = countSocials(pair);
-
-  // Volume spike: 6h volume > 50% of 24h volume = momentum
-  if (vol6h > 0 && vol24h > 0 && vol6h / vol24h > 0.5) {
-    catalysts.push({
-      name: "Volume Momentum",
-      points: 5,
-      reason: "6h volume >50% of 24h — active momentum",
-    });
-  }
-
-  // Strong buy pressure
-  if (buys24h > 0 && sells24h > 0 && buys24h / sells24h > 2) {
-    catalysts.push({
-      name: "Buy Pressure",
-      points: 3,
-      reason: `Buy/sell ratio ${(buys24h / sells24h).toFixed(1)}x`,
-    });
-  }
-
-  // Multi-platform social
-  if (socials >= 4) {
-    catalysts.push({
-      name: "Multi-Platform Presence",
-      points: 5,
-      reason: `${socials} social platforms active`,
-    });
-  }
-
-  // Negative: severe dump
-  if (priceChange < -30) {
-    catalysts.push({
-      name: "Price Dump",
-      points: -10,
-      reason: `${priceChange.toFixed(1)}% drop in 24h`,
-    });
-  }
-
-  // Negative: low buy/sell ratio (dump pattern)
-  if (buys24h > 0 && sells24h > 0 && sells24h / buys24h > 3) {
-    catalysts.push({
-      name: "Sell Pressure",
-      points: -5,
-      reason: `Sell/buy ratio ${(sells24h / buys24h).toFixed(1)}x — dump risk`,
-    });
-  }
-
-  return catalysts;
-}
-
-// --- Score Action Mapping ---
-
-function getAction(score: number): ScoreAction {
-  if (score >= 85) return "HOT";
-  if (score >= 70) return "QUALIFIED";
-  if (score >= 50) return "WATCH";
-  return "SKIP";
-}
-
-function getRecommendation(action: ScoreAction): string {
-  switch (action) {
-    case "HOT":
-      return "🔥 HOT — Immediate outreach + wallet forensics recommended";
-    case "QUALIFIED":
-      return "✅ QUALIFIED — Priority queue, run wallet forensics";
-    case "WATCH":
-      return "👀 WATCH — Monitor for 48 hours";
-    case "SKIP":
-      return "⏭️ SKIP — Below threshold, log only";
-  }
-}
-
-// --- Main Scoring Function ---
-
 /**
- * Score a token from DexScreener pair data
- * Returns a full TokenScore with breakdown, catalysts, and recommendation
+ * Buzz by SolCex — Token Scoring Service
+ * Scores tokens based on liquidity, volume, holders, social, and contract safety
  */
-export function scoreToken(pair: DexPair): TokenScore {
-  // Run all factor scores
-  const breakdown: ScoreBreakdown[] = [
-    scoreLiquidity(pair),
-    scoreMarketCap(pair),
-    scoreVolume(pair),
-    scoreSocial(pair),
-    scoreAge(pair),
-    scoreTeam(pair),
-  ];
 
-  // Base score from factors
-  let baseScore = breakdown.reduce((sum, b) => sum + b.score, 0);
+import type { IAgentRuntime } from '@elizaos/core';
+import type { TokenPair, TokenScore, BuzzPluginConfig } from '../types/index.js';
 
-  // Catalyst adjustments
-  const catalysts = detectCatalysts(pair);
-  const catalystTotal = catalysts.reduce((sum, c) => sum + c.points, 0);
+export class TokenScoringService {
+  static serviceType = 'token-scoring' as const;
 
-  // Total score (capped at 0-100)
-  const totalScore = Math.max(0, Math.min(100, baseScore + catalystTotal));
+  private runtime: IAgentRuntime;
+  private config: BuzzPluginConfig;
 
-  const action = getAction(totalScore);
+  constructor(runtime: IAgentRuntime) {
+    this.runtime = runtime;
+    this.config = {
+      minLiquidityUsd: Number(runtime.getSetting?.('BUZZ_MIN_LIQUIDITY') || 10000),
+      minVolumeH24: Number(runtime.getSetting?.('BUZZ_MIN_VOLUME_24H') || 5000),
+      minOverallScore: Number(runtime.getSetting?.('BUZZ_MIN_SCORE') || 60),
+    };
+  }
 
-  return {
-    contractAddress: pair.baseToken.address,
-    chain: pair.chainId,
-    tokenName: pair.baseToken.name,
-    tokenSymbol: pair.baseToken.symbol,
-    totalScore,
-    maxScore: 100,
-    action,
-    breakdown,
-    catalysts,
-    recommendation: getRecommendation(action),
-    scoredAt: new Date().toISOString(),
-    pairAddress: pair.pairAddress,
-    pairUrl: pair.url,
-  };
-}
+  get capabilityDescription(): string {
+    return 'Scores tokens on liquidity, volume, holder distribution, social presence, and contract safety';
+  }
 
-/**
- * Apply wallet forensics result to an existing score
- * Returns adjusted total score
- */
-export function applyWalletAdjustment(
-  tokenScore: TokenScore,
-  walletResult: WalletForensicsResult
-): TokenScore {
-  const adjusted = { ...tokenScore };
-  const adjustment = walletResult.scoreAdjustment;
+  static async start(runtime: IAgentRuntime): Promise<TokenScoringService> {
+    const service = new TokenScoringService(runtime);
+    console.log('[Buzz/Scoring] Service initialized');
+    return service;
+  }
 
-  // Add wallet flags as catalysts
-  for (const flag of walletResult.flags) {
-    adjusted.catalysts.push({
-      name: `Wallet: ${flag.flag}`,
-      points: flag.impact,
-      reason: flag.reason,
+  async stop(): Promise<void> {
+    console.log('[Buzz/Scoring] Service stopped');
+  }
+
+  /**
+   * Score a token based on its pair data
+   */
+  scoreToken(pair: TokenPair): TokenScore {
+    const flags: string[] = [];
+
+    // Liquidity Score (0-100)
+    const liquidityUsd = pair.liquidity?.usd || 0;
+    let liquidityScore = 0;
+    if (liquidityUsd >= 1000000) liquidityScore = 100;
+    else if (liquidityUsd >= 500000) liquidityScore = 85;
+    else if (liquidityUsd >= 100000) liquidityScore = 70;
+    else if (liquidityUsd >= 50000) liquidityScore = 55;
+    else if (liquidityUsd >= 10000) liquidityScore = 40;
+    else if (liquidityUsd >= 5000) liquidityScore = 25;
+    else {
+      liquidityScore = 10;
+      flags.push('LOW_LIQUIDITY');
+    }
+
+    // Volume Score (0-100)
+    const volume24h = pair.volume?.h24 || 0;
+    let volumeScore = 0;
+    if (volume24h >= 5000000) volumeScore = 100;
+    else if (volume24h >= 1000000) volumeScore = 85;
+    else if (volume24h >= 500000) volumeScore = 70;
+    else if (volume24h >= 100000) volumeScore = 55;
+    else if (volume24h >= 50000) volumeScore = 40;
+    else if (volume24h >= 10000) volumeScore = 25;
+    else {
+      volumeScore = 10;
+      flags.push('LOW_VOLUME');
+    }
+
+    // Holder Score (approximated from transaction patterns)
+    const txns24h = pair.txns?.h24 || { buys: 0, sells: 0 };
+    const totalTxns = txns24h.buys + txns24h.sells;
+    const buyRatio = totalTxns > 0 ? txns24h.buys / totalTxns : 0;
+    let holderScore = 0;
+    if (totalTxns >= 1000) holderScore = 90;
+    else if (totalTxns >= 500) holderScore = 75;
+    else if (totalTxns >= 200) holderScore = 60;
+    else if (totalTxns >= 100) holderScore = 45;
+    else if (totalTxns >= 50) holderScore = 30;
+    else {
+      holderScore = 15;
+      flags.push('LOW_ACTIVITY');
+    }
+
+    // Buy/sell ratio check
+    if (buyRatio > 0.85) flags.push('HIGH_BUY_PRESSURE');
+    if (buyRatio < 0.15) flags.push('HIGH_SELL_PRESSURE');
+
+    // Social Score (placeholder — would integrate with social APIs)
+    let socialScore = 50; // Default neutral
+
+    // Contract Safety Score (basic heuristics)
+    let contractSafetyScore = 70; // Default moderate
+    const pairAge = Date.now() - (pair.pairCreatedAt || Date.now());
+    const pairAgeDays = pairAge / (1000 * 60 * 60 * 24);
+
+    if (pairAgeDays < 1) {
+      contractSafetyScore -= 30;
+      flags.push('VERY_NEW_TOKEN');
+    } else if (pairAgeDays < 7) {
+      contractSafetyScore -= 15;
+      flags.push('NEW_TOKEN');
+    } else if (pairAgeDays > 90) {
+      contractSafetyScore += 15;
+    }
+
+    // FDV sanity check
+    if (pair.fdv && pair.fdv > 0) {
+      const volumeToFdv = volume24h / pair.fdv;
+      if (volumeToFdv > 1) {
+        flags.push('SUSPICIOUS_VOLUME_TO_FDV');
+        contractSafetyScore -= 20;
+      }
+    }
+
+    contractSafetyScore = Math.max(0, Math.min(100, contractSafetyScore));
+
+    // Overall Score (weighted average)
+    const overallScore = Math.round(
+      liquidityScore * 0.25 +
+      volumeScore * 0.25 +
+      holderScore * 0.20 +
+      socialScore * 0.15 +
+      contractSafetyScore * 0.15
+    );
+
+    // Listing Recommendation
+    let listingRecommendation: TokenScore['listingRecommendation'];
+    if (flags.includes('SUSPICIOUS_VOLUME_TO_FDV') || flags.includes('VERY_NEW_TOKEN')) {
+      listingRecommendation = overallScore >= 70 ? 'MAYBE' : 'REJECT';
+    } else if (overallScore >= 80) {
+      listingRecommendation = 'STRONG_YES';
+    } else if (overallScore >= 65) {
+      listingRecommendation = 'YES';
+    } else if (overallScore >= 50) {
+      listingRecommendation = 'MAYBE';
+    } else if (overallScore >= 35) {
+      listingRecommendation = 'NO';
+    } else {
+      listingRecommendation = 'REJECT';
+    }
+
+    return {
+      address: pair.baseToken.address,
+      symbol: pair.baseToken.symbol,
+      name: pair.baseToken.name,
+      chain: pair.chainId,
+      overallScore,
+      liquidityScore,
+      volumeScore,
+      holderScore,
+      socialScore,
+      contractSafetyScore,
+      listingRecommendation,
+      flags,
+      scoredAt: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Filter pairs that meet minimum thresholds
+   */
+  filterQualifiedPairs(pairs: TokenPair[]): TokenPair[] {
+    return pairs.filter(pair => {
+      const liq = pair.liquidity?.usd || 0;
+      const vol = pair.volume?.h24 || 0;
+      return liq >= (this.config.minLiquidityUsd || 10000) &&
+             vol >= (this.config.minVolumeH24 || 5000);
     });
   }
 
-  // Recalculate total
-  adjusted.totalScore = Math.max(
-    0,
-    Math.min(100, tokenScore.totalScore + adjustment)
-  );
-  adjusted.action = getAction(adjusted.totalScore);
-  adjusted.recommendation = getRecommendation(adjusted.action);
-
-  // Auto-reject mixer-funded
-  if (walletResult.flags.some((f) => f.flag === "MIXER_REJECT")) {
-    adjusted.totalScore = 0;
-    adjusted.action = "SKIP";
-    adjusted.recommendation =
-      "🚫 AUTO-REJECTED — Deployer funded via mixer/tornado";
+  /**
+   * Score and rank multiple tokens
+   */
+  scoreAndRank(pairs: TokenPair[]): TokenScore[] {
+    return pairs
+      .map(pair => this.scoreToken(pair))
+      .filter(score => score.overallScore >= (this.config.minOverallScore || 60))
+      .sort((a, b) => b.overallScore - a.overallScore);
   }
-
-  return adjusted;
-}
-
-/**
- * Batch score multiple pairs, sorted by score descending
- */
-export function batchScore(pairs: DexPair[]): TokenScore[] {
-  return pairs.map(scoreToken).sort((a, b) => b.totalScore - a.totalScore);
 }

@@ -1,56 +1,47 @@
-import type { Action, IAgentRuntime, Memory, State, HandlerCallback } from "@elizaos/core";
-import { scanHighPotential, searchTokens } from "../services/dexscreener.js";
-import { batchScore } from "../services/scoring.js";
+/**
+ * Buzz by SolCex — SCAN_TOKENS Action
+ * Discovers and scores new token prospects from DexScreener
+ */
+
+import type { Action, IAgentRuntime, Memory, State, HandlerCallback } from '@elizaos/core';
+import { DexScreenerService } from '../services/dexscreener.js';
+import { TokenScoringService } from '../services/scoring.js';
+import type { BDProspect, ScanResult } from '../types/index.js';
 
 export const scanTokensAction: Action = {
-  name: "SCAN_TOKENS",
-  description:
-    "Scan for high-potential tokens across DEXs. " +
-    "Finds trending and boosted tokens, filters by liquidity/volume/market cap minimums, " +
-    "then scores each with the SolCex 100-point system. " +
-    "Use when: scan tokens, find new tokens, discover tokens, what's trending",
+  name: 'SCAN_TOKENS',
+  description: 'Scan DexScreener for new token prospects, score them, and identify listing candidates for SolCex Exchange. Use when user asks to find new tokens, scan for projects, or discover listing candidates.',
+  similes: ['scan_tokens', 'find_tokens', 'discover_projects', 'token_scan', 'scan_dex'],
+
   examples: [
     [
       {
-        user: "user",
-        content: { text: "Scan for promising tokens on Solana" },
+        name: 'user',
+        content: { text: 'Scan for new token prospects on Solana' },
       },
     ],
     [
       {
-        user: "user",
-        content: { text: "Find trending tokens with good liquidity" },
+        name: 'user',
+        content: { text: 'Find me some good tokens to list' },
       },
     ],
     [
       {
-        user: "user",
-        content: { text: "What new tokens are worth looking at?" },
+        name: 'user',
+        content: { text: 'Run a token scan and score the results' },
       },
     ],
-  ],
-  similes: [
-    "scan tokens",
-    "find tokens",
-    "discover tokens",
-    "trending tokens",
-    "token discovery",
-    "new tokens",
-    "scan dex",
   ],
 
-  validate: async (
-    _runtime: IAgentRuntime,
-    message: Memory,
-    _state?: State
-  ): Promise<boolean> => {
-    const text = (message.content?.text || "").toLowerCase();
+  validate: async (runtime: IAgentRuntime, message: Memory, state?: State): Promise<boolean> => {
+    const text = (message.content?.text || '').toLowerCase();
     return (
-      text.includes("scan") ||
-      text.includes("find") ||
-      text.includes("discover") ||
-      text.includes("trending") ||
-      text.includes("new token")
+      text.includes('scan') ||
+      text.includes('find token') ||
+      text.includes('discover') ||
+      text.includes('listing candidate') ||
+      text.includes('token prospect')
     );
   },
 
@@ -58,101 +49,125 @@ export const scanTokensAction: Action = {
     runtime: IAgentRuntime,
     message: Memory,
     state?: State,
-    _options?: Record<string, unknown>,
+    options?: Record<string, unknown>,
     callback?: HandlerCallback
-  ): Promise<boolean> => {
-    const text = (message.content?.text || "").toLowerCase();
-
-    // Detect chain preference
-    let chains: string[] | undefined;
-    if (text.includes("solana") || text.includes("sol")) chains = ["solana"];
-    else if (text.includes("ethereum") || text.includes("eth"))
-      chains = ["ethereum"];
-    else if (text.includes("base")) chains = ["base"];
-    else if (text.includes("bsc") || text.includes("bnb")) chains = ["bsc"];
-
-    // Detect if user is searching for specific keyword
-    const searchMatch = text.match(
-      /(?:scan|find|search|discover)\s+(?:for\s+)?(.+?)(?:\s+on\s+|\s+token|\s*$)/
-    );
-    const searchQuery = searchMatch?.[1]?.trim();
-
+  ) => {
     try {
-      let pairs;
+      const dexService = await DexScreenerService.start(runtime);
+      const scoringService = await TokenScoringService.start(runtime);
 
-      if (
-        searchQuery &&
-        !["tokens", "promising", "trending", "new", "good"].includes(
-          searchQuery
-        )
-      ) {
-        // Specific search
-        pairs = await searchTokens(searchQuery);
-        if (chains) {
-          pairs = pairs.filter((p) => chains!.includes(p.chainId));
-        }
-        pairs = pairs.slice(0, 20);
-      } else {
-        // General high-potential scan
-        pairs = await scanHighPotential({ chains });
-      }
-
-      if (pairs.length === 0) {
-        if (callback) {
-          callback({
-            text: "No tokens matching the criteria were found. Try broadening the search or checking back later.",
-          });
-        }
-        return true;
-      }
-
-      // Score all found pairs
-      const scored = batchScore(pairs);
-      const top = scored.slice(0, 10);
-
-      // Format results
-      const results = top
-        .map((t, i) => {
-          const emoji =
-            t.action === "HOT"
-              ? "🔥"
-              : t.action === "QUALIFIED"
-                ? "✅"
-                : t.action === "WATCH"
-                  ? "👀"
-                  : "⏭️";
-          return (
-            `${i + 1}. ${emoji} **${t.tokenSymbol}** (${t.chain}) — Score: ${t.totalScore}/100 [${t.action}]\n` +
-            `   Liq: $${(t.breakdown[0].value)} | MCap: ${t.breakdown[1].value} | Vol: ${t.breakdown[2].value}\n` +
-            `   CA: \`${t.contractAddress}\`\n` +
-            `   ${t.recommendation}`
-          );
-        })
-        .join("\n\n");
-
-      const summary =
-        `**SolCex Token Scan — ${top.length} Results**\n` +
-        `${chains ? `Chain: ${chains.join(", ")}` : "All chains"} | ` +
-        `HOT: ${top.filter((t) => t.action === "HOT").length} | ` +
-        `Qualified: ${top.filter((t) => t.action === "QUALIFIED").length} | ` +
-        `Watch: ${top.filter((t) => t.action === "WATCH").length}\n\n` +
-        results +
-        `\n\n---\n` +
-        `💡 Use **SCORE_TOKEN** with a contract address for detailed breakdown.\n` +
-        `🔍 Use **CHECK_WALLET** to run deployer forensics on any token scoring 70+.`;
+      // Determine chain from message
+      const text = (message.content?.text || '').toLowerCase();
+      let chain = 'solana';
+      if (text.includes('ethereum') || text.includes('eth')) chain = 'ethereum';
+      else if (text.includes('base')) chain = 'base';
+      else if (text.includes('bsc') || text.includes('bnb')) chain = 'bsc';
 
       if (callback) {
-        callback({ text: summary });
-      }
-
-      return true;
-    } catch (error: any) {
-      if (callback) {
-        callback({
-          text: `Token scan failed: ${error.message}. DexScreener API may be rate-limited — try again in a minute.`,
+        await callback({
+          text: `🔍 Buzz scanning DexScreener for ${chain} token prospects...`,
+          action: 'SCAN_TOKENS',
         });
       }
-      return false;
+
+      // Fetch latest profiles and boosted tokens
+      const [profiles, boosted] = await Promise.all([
+        dexService.getLatestProfiles(),
+        dexService.getBoostedTokens(),
+      ]);
+
+      // Combine and deduplicate by address
+      const allAddresses = new Set<string>();
+      const uniqueProfiles = [...profiles, ...boosted].filter(p => {
+        if (allAddresses.has(p.address)) return false;
+        allAddresses.add(p.address);
+        return true;
+      });
+
+      // Get detailed pair data for top candidates
+      const addressBatch = uniqueProfiles.slice(0, 20).map(p => p.address);
+      let pairs = addressBatch.length > 0
+        ? await dexService.getTokensByAddress(addressBatch)
+        : [];
+
+      // Filter by chain if specified
+      if (chain !== 'all') {
+        pairs = pairs.filter(p => p.chainId === chain);
+      }
+
+      // Filter qualified pairs
+      const qualifiedPairs = scoringService.filterQualifiedPairs(pairs);
+
+      // Score and rank
+      const scores = scoringService.scoreAndRank(qualifiedPairs);
+
+      // Build prospects
+      const prospects: BDProspect[] = scores.slice(0, 10).map(score => ({
+        tokenAddress: score.address,
+        tokenSymbol: score.symbol,
+        tokenName: score.name,
+        chain: score.chain,
+        score,
+        contactInfo: {
+          twitter: uniqueProfiles.find(p => p.address === score.address)?.twitter,
+          telegram: uniqueProfiles.find(p => p.address === score.address)?.telegram,
+          website: uniqueProfiles.find(p => p.address === score.address)?.website,
+        },
+        status: 'scored',
+        discoveredAt: new Date().toISOString(),
+        lastUpdated: new Date().toISOString(),
+      }));
+
+      const scanResult: ScanResult = {
+        tokensScanned: pairs.length,
+        tokensQualified: qualifiedPairs.length,
+        prospects,
+        scanTimestamp: new Date().toISOString(),
+        chain,
+      };
+
+      // Format response
+      let responseText = `📊 **Buzz Scan Complete** (${chain})\n`;
+      responseText += `Scanned: ${scanResult.tokensScanned} | Qualified: ${scanResult.tokensQualified} | Prospects: ${prospects.length}\n\n`;
+
+      for (const prospect of prospects.slice(0, 5)) {
+        const s = prospect.score;
+        const rec = s.listingRecommendation;
+        const emoji = rec === 'STRONG_YES' ? '🟢' : rec === 'YES' ? '🟡' : rec === 'MAYBE' ? '🟠' : '🔴';
+        responseText += `${emoji} **${s.symbol}** (${s.name})\n`;
+        responseText += `   Score: ${s.overallScore}/100 | Rec: ${rec}\n`;
+        responseText += `   CA: \`${s.address}\`\n`;
+        if (s.flags.length > 0) responseText += `   Flags: ${s.flags.join(', ')}\n`;
+        responseText += '\n';
+      }
+
+      if (prospects.length === 0) {
+        responseText += 'No qualifying prospects found in this scan. Try adjusting thresholds or scanning a different chain.';
+      }
+
+      if (callback) {
+        await callback({
+          text: responseText,
+          action: 'SCAN_TOKENS',
+          data: scanResult,
+        });
+      }
+
+      return {
+        success: true,
+        text: responseText,
+        data: scanResult,
+      };
+    } catch (error) {
+      const errorMsg = `❌ Buzz scan failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      if (callback) {
+        await callback({ text: errorMsg, action: 'SCAN_TOKENS' });
+      }
+      return {
+        success: false,
+        text: errorMsg,
+        error: String(error),
+      };
     }
   },
 };

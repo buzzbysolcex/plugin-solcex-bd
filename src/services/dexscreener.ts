@@ -1,173 +1,109 @@
-// ============================================================
-// DexScreener API Service
-// Free multi-chain DEX data: pairs, liquidity, volume, socials
-// Docs: https://docs.dexscreener.com/api/reference
-// Rate limit: 300 requests/minute (no API key needed)
-// ============================================================
-
-import type {
-  DexPair,
-  DexSearchResponse,
-  DexTokenResponse,
-} from "../types/index.js";
-
-const BASE_URL = "https://api.dexscreener.com/latest/dex";
-const TOKENS_URL = "https://api.dexscreener.com/tokens/v1";
-
 /**
- * Search tokens by keyword across all chains
+ * Buzz by SolCex — DexScreener Service
+ * Fetches token profiles, pairs, and market data from DexScreener API
  */
-export async function searchTokens(query: string): Promise<DexPair[]> {
-  const resp = await fetch(`${BASE_URL}/search?q=${encodeURIComponent(query)}`);
-  if (!resp.ok) throw new Error(`DexScreener search failed: ${resp.status}`);
-  const data = (await resp.json()) as DexSearchResponse;
-  return data.pairs || [];
-}
 
-/**
- * Get pair data by contract address(es) on a specific chain
- * Supports up to 30 addresses comma-separated
- */
-export async function getTokenPairs(
-  chain: string,
-  contractAddress: string
-): Promise<DexPair[]> {
-  const resp = await fetch(`${TOKENS_URL}/${chain}/${contractAddress}`);
-  if (!resp.ok) throw new Error(`DexScreener token lookup failed: ${resp.status}`);
-  const data = (await resp.json()) as DexTokenResponse;
-  return data.pairs || [];
-}
+import type { IAgentRuntime, Service } from '@elizaos/core';
+import type { TokenProfile, TokenPair } from '../types/index.js';
 
-/**
- * Get pair data by pair address
- */
-export async function getPairByAddress(
-  chain: string,
-  pairAddress: string
-): Promise<DexPair | null> {
-  const resp = await fetch(`${BASE_URL}/pairs/${chain}/${pairAddress}`);
-  if (!resp.ok) throw new Error(`DexScreener pair lookup failed: ${resp.status}`);
-  const data = (await resp.json()) as { pairs?: DexPair[]; pair?: DexPair };
-  const pairs = data.pairs || data.pair ? [data.pair || data.pairs?.[0]] : [];
-  return pairs[0] || null;
-}
+const DEXSCREENER_BASE = 'https://api.dexscreener.com';
 
-/**
- * Get trending/boosted tokens (new profiles)
- */
-export async function getTrendingTokens(): Promise<DexPair[]> {
-  const resp = await fetch("https://api.dexscreener.com/token-profiles/latest/v1");
-  if (!resp.ok) throw new Error(`DexScreener trending failed: ${resp.status}`);
-  const profiles = (await resp.json()) as Array<{ chainId: string; tokenAddress: string }>;
+export class DexScreenerService {
+  static serviceType = 'dexscreener' as const;
 
-  // Get top 10 unique addresses grouped by chain
-  const seen = new Set<string>();
-  const unique: Array<{ chain: string; address: string }> = [];
-  for (const p of profiles) {
-    const key = `${p.chainId}:${p.tokenAddress}`;
-    if (!seen.has(key) && unique.length < 10) {
-      seen.add(key);
-      unique.push({ chain: p.chainId, address: p.tokenAddress });
-    }
+  private runtime: IAgentRuntime;
+  private baseUrl: string;
+
+  constructor(runtime: IAgentRuntime) {
+    this.runtime = runtime;
+    this.baseUrl = (runtime.getSetting?.('DEXSCREENER_API_URL') as string) || DEXSCREENER_BASE;
   }
 
-  // Fetch pair data for each
-  const pairs: DexPair[] = [];
-  for (const { chain, address } of unique) {
+  get capabilityDescription(): string {
+    return 'Fetches real-time token market data, pairs, and profiles from DexScreener API';
+  }
+
+  static async start(runtime: IAgentRuntime): Promise<DexScreenerService> {
+    const service = new DexScreenerService(runtime);
+    console.log('[Buzz/DexScreener] Service initialized');
+    return service;
+  }
+
+  async stop(): Promise<void> {
+    console.log('[Buzz/DexScreener] Service stopped');
+  }
+
+  /**
+   * Get latest token profiles (trending/boosted)
+   */
+  async getLatestProfiles(): Promise<TokenProfile[]> {
     try {
-      const result = await getTokenPairs(chain, address);
-      if (result.length > 0) pairs.push(result[0]);
-    } catch {
-      // Skip failed lookups
+      const response = await fetch(`${this.baseUrl}/token-profiles/latest/v1`);
+      if (!response.ok) throw new Error(`DexScreener API error: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('[Buzz/DexScreener] Failed to fetch profiles:', error);
+      return [];
     }
   }
 
-  return pairs;
-}
-
-/**
- * Get boosted tokens (promoted on DexScreener)
- */
-export async function getBoostedTokens(): Promise<DexPair[]> {
-  const resp = await fetch("https://api.dexscreener.com/token-boosts/latest/v1");
-  if (!resp.ok) return [];
-  const boosts = (await resp.json()) as Array<{ chainId: string; tokenAddress: string; amount: number }>;
-
-  const topBoosts = boosts.slice(0, 10);
-  const pairs: DexPair[] = [];
-
-  for (const b of topBoosts) {
+  /**
+   * Get boosted tokens
+   */
+  async getBoostedTokens(): Promise<TokenProfile[]> {
     try {
-      const result = await getTokenPairs(b.chainId, b.tokenAddress);
-      if (result.length > 0) pairs.push(result[0]);
-    } catch {
-      // Skip
+      const response = await fetch(`${this.baseUrl}/token-boosts/latest/v1`);
+      if (!response.ok) throw new Error(`DexScreener API error: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('[Buzz/DexScreener] Failed to fetch boosted tokens:', error);
+      return [];
     }
   }
 
-  return pairs;
-}
-
-/**
- * Scan for high-potential tokens: trending + boosted, filtered by minimums
- */
-export async function scanHighPotential(options?: {
-  minLiquidity?: number;
-  minVolume24h?: number;
-  minMarketCap?: number;
-  chains?: string[];
-}): Promise<DexPair[]> {
-  const minLiq = options?.minLiquidity ?? 100_000;
-  const minVol = options?.minVolume24h ?? 50_000;
-  const minMcap = options?.minMarketCap ?? 500_000;
-  const chains = options?.chains;
-
-  const [trending, boosted] = await Promise.allSettled([
-    getTrendingTokens(),
-    getBoostedTokens(),
-  ]);
-
-  const allPairs: DexPair[] = [
-    ...(trending.status === "fulfilled" ? trending.value : []),
-    ...(boosted.status === "fulfilled" ? boosted.value : []),
-  ];
-
-  // Deduplicate by pair address
-  const seen = new Set<string>();
-  const unique: DexPair[] = [];
-  for (const pair of allPairs) {
-    if (!seen.has(pair.pairAddress)) {
-      seen.add(pair.pairAddress);
-      unique.push(pair);
+  /**
+   * Search for token pairs by query
+   */
+  async searchPairs(query: string): Promise<TokenPair[]> {
+    try {
+      const response = await fetch(`${this.baseUrl}/latest/dex/search?q=${encodeURIComponent(query)}`);
+      if (!response.ok) throw new Error(`DexScreener API error: ${response.status}`);
+      const data = await response.json();
+      return data.pairs || [];
+    } catch (error) {
+      console.error('[Buzz/DexScreener] Failed to search pairs:', error);
+      return [];
     }
   }
 
-  // Filter by minimums
-  return unique.filter((pair) => {
-    const liq = pair.liquidity?.usd ?? 0;
-    const vol = pair.volume?.h24 ?? 0;
-    const mcap = pair.marketCap ?? pair.fdv ?? 0;
-    const chainMatch = !chains || chains.includes(pair.chainId);
-    return liq >= minLiq && vol >= minVol && mcap >= minMcap && chainMatch;
-  });
-}
+  /**
+   * Get pair data by chain and pair address
+   */
+  async getPairsByChain(chainId: string, pairAddresses: string[]): Promise<TokenPair[]> {
+    try {
+      const addresses = pairAddresses.join(',');
+      const response = await fetch(`${this.baseUrl}/latest/dex/pairs/${chainId}/${addresses}`);
+      if (!response.ok) throw new Error(`DexScreener API error: ${response.status}`);
+      const data = await response.json();
+      return data.pairs || [];
+    } catch (error) {
+      console.error('[Buzz/DexScreener] Failed to fetch pairs by chain:', error);
+      return [];
+    }
+  }
 
-/**
- * Get token age in days from pair creation timestamp
- */
-export function getTokenAgeDays(pair: DexPair): number {
-  if (!pair.pairCreatedAt) return -1;
-  const now = Date.now();
-  const created = pair.pairCreatedAt;
-  return Math.floor((now - created) / (1000 * 60 * 60 * 24));
-}
-
-/**
- * Count social platforms from pair info
- */
-export function countSocials(pair: DexPair): number {
-  let count = 0;
-  if (pair.info?.websites?.length) count += pair.info.websites.length;
-  if (pair.info?.socials?.length) count += pair.info.socials.length;
-  return count;
+  /**
+   * Get token data by address(es)
+   */
+  async getTokensByAddress(addresses: string[]): Promise<TokenPair[]> {
+    try {
+      const addr = addresses.join(',');
+      const response = await fetch(`${this.baseUrl}/tokens/v1/${addr}`);
+      if (!response.ok) throw new Error(`DexScreener API error: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('[Buzz/DexScreener] Failed to fetch tokens by address:', error);
+      return [];
+    }
+  }
 }

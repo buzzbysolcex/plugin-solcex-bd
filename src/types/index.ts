@@ -1,258 +1,125 @@
-// ============================================================
-// @elizaos/plugin-solcex-bd — Type Definitions
-// SolCex Exchange Business Development Plugin for ElizaOS
-// ============================================================
+/**
+ * Buzz by SolCex — elizaOS Plugin Types
+ * Token discovery, scoring, and BD pipeline types
+ */
 
-// --- Token & Pair Data (from DexScreener) ---
+export interface TokenProfile {
+  address: string;
+  chainId: string;
+  symbol: string;
+  name: string;
+  description?: string;
+  icon?: string;
+  website?: string;
+  twitter?: string;
+  telegram?: string;
+  links?: Record<string, string>;
+}
 
-export interface DexPair {
+export interface TokenPair {
   chainId: string;
   dexId: string;
-  url: string;
   pairAddress: string;
   baseToken: {
     address: string;
-    name: string;
     symbol: string;
+    name: string;
   };
   quoteToken: {
     address: string;
-    name: string;
     symbol: string;
+    name: string;
   };
-  priceNative: string;
   priceUsd: string;
-  txns: {
-    h24: { buys: number; sells: number };
-    h6: { buys: number; sells: number };
-    h1: { buys: number; sells: number };
-    m5: { buys: number; sells: number };
-  };
+  priceNative: string;
   volume: {
     h24: number;
     h6: number;
     h1: number;
     m5: number;
   };
-  priceChange: {
-    h24: number;
-    h6: number;
-    h1: number;
-    m5: number;
-  };
-  liquidity?: {
+  liquidity: {
     usd: number;
     base: number;
     quote: number;
   };
-  fdv?: number;
-  marketCap?: number;
-  pairCreatedAt?: number;
-  info?: {
-    imageUrl?: string;
-    websites?: Array<{ label: string; url: string }>;
-    socials?: Array<{ type: string; url: string }>;
+  fdv: number;
+  marketCap: number;
+  pairCreatedAt: number;
+  txns: {
+    h24: { buys: number; sells: number };
+    h6: { buys: number; sells: number };
+    h1: { buys: number; sells: number };
+    m5: { buys: number; sells: number };
   };
 }
 
-export interface DexSearchResponse {
-  schemaVersion: string;
-  pairs: DexPair[] | null;
-}
-
-export interface DexTokenResponse {
-  pairs: DexPair[] | null;
-}
-
-// --- Scoring ---
-
-export interface ScoreBreakdown {
-  category: string;
-  weight: number;
-  score: number;
-  maxScore: number;
-  value: string;
-  details: string;
-}
-
-export interface CatalystAdjustment {
-  name: string;
-  points: number;
-  reason: string;
-}
-
-export type ScoreAction = "HOT" | "QUALIFIED" | "WATCH" | "SKIP";
-
 export interface TokenScore {
-  contractAddress: string;
+  address: string;
+  symbol: string;
+  name: string;
   chain: string;
-  tokenName: string;
-  tokenSymbol: string;
-  totalScore: number;
-  maxScore: number;
-  action: ScoreAction;
-  breakdown: ScoreBreakdown[];
-  catalysts: CatalystAdjustment[];
-  recommendation: string;
+  overallScore: number;
+  liquidityScore: number;
+  volumeScore: number;
+  holderScore: number;
+  socialScore: number;
+  contractSafetyScore: number;
+  listingRecommendation: 'STRONG_YES' | 'YES' | 'MAYBE' | 'NO' | 'REJECT';
+  flags: string[];
   scoredAt: string;
-  pairAddress: string;
-  pairUrl: string;
 }
 
-// --- Wallet Forensics (Helius) ---
-
-export interface HeliusBalanceResponse {
-  nativeBalance: number;
-  tokens: Array<{
-    mint: string;
-    amount: number;
-    decimals: number;
-  }>;
-}
-
-export interface HeliusTransaction {
-  signature: string;
-  timestamp: number;
-  type: string;
-  description: string;
-  fee: number;
-  nativeTransfers: Array<{
-    fromUserAccount: string;
-    toUserAccount: string;
-    amount: number;
-  }>;
-  tokenTransfers: Array<{
-    fromUserAccount: string;
-    toUserAccount: string;
-    mint: string;
-    tokenAmount: number;
-  }>;
-}
-
-export type WalletFlag =
-  | "WALLET_VERIFIED"
-  | "INSTITUTIONAL"
-  | "NET_POSITIVE"
-  | "SERIAL_CREATOR"
-  | "DUMP_ALERT"
-  | "MIXER_REJECT"
-  | "UNKNOWN";
-
-export interface WalletFlagDetail {
-  flag: WalletFlag;
-  impact: number; // positive = bonus, negative = penalty
-  reason: string;
-}
-
-export interface WalletForensicsResult {
-  deployerAddress: string;
-  chain: string;
-  fundedBy: string;
-  nativeBalance: number;
-  tokenCount: number;
-  recentTransactions: number;
-  flags: WalletFlagDetail[];
-  scoreAdjustment: number;
-  riskLevel: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-  analyzedAt: string;
-  summary: string;
-}
-
-// --- Pipeline ---
-
-export interface PipelineEntry {
-  contractAddress: string;
-  chain: string;
-  tokenName: string;
+export interface BDProspect {
+  tokenAddress: string;
   tokenSymbol: string;
-  score: number;
-  stage: PipelineStage;
-  walletChecked: boolean;
-  walletFlags: WalletFlag[];
-  addedAt: string;
-  updatedAt: string;
-}
-
-export type PipelineStage =
-  | "DISCOVERED"
-  | "SCORED"
-  | "VERIFIED"
-  | "QUALIFIED"
-  | "OUTREACH_DRAFTED"
-  | "HUMAN_APPROVED"
-  | "SENT"
-  | "RESPONDED"
-  | "NEGOTIATING"
-  | "LISTED";
-
-export interface PipelineStatus {
-  total: number;
-  byStage: Record<PipelineStage, number>;
-  hot: number;
-  qualified: number;
-  pendingOutreach: number;
-  updatedAt: string;
-}
-
-// --- Listing Inquiry ---
-
-export interface ListingInquiry {
-  id: string;
-  contractAddress: string;
-  chain: string;
   tokenName: string;
-  tokenSymbol: string;
-  score: number;
-  walletResult: WalletForensicsResult | null;
-  requestedBy: string; // agent name or ID
-  requestedAt: string;
-  status: "QUEUED" | "APPROVED" | "REJECTED" | "SENT";
-  notes: string;
+  chain: string;
+  score: TokenScore;
+  contactInfo?: {
+    twitter?: string;
+    telegram?: string;
+    email?: string;
+    website?: string;
+  };
+  status: 'discovered' | 'scored' | 'contacted' | 'negotiating' | 'listed' | 'rejected';
+  discoveredAt: string;
+  lastUpdated: string;
+  notes?: string;
 }
 
-// --- Market Intelligence ---
-
-export interface MarketIntel {
-  trending: Array<{
-    symbol: string;
-    chain: string;
-    score: number;
-    volumeChange24h: number;
-  }>;
-  volumeSpikes: Array<{
-    symbol: string;
-    chain: string;
-    volume24h: number;
-    changePercent: number;
-  }>;
-  newLaunches: Array<{
-    symbol: string;
-    chain: string;
-    contractAddress: string;
-    launchedAt: string;
-    liquidity: number;
-  }>;
-  pipelineCount: number;
-  updatedAt: string;
-}
-
-// --- Plugin Config ---
-
-export interface SolcexPluginConfig {
+export interface BuzzPluginConfig {
+  dexscreenerApiUrl?: string;
   heliusApiKey?: string;
   solcexApiUrl?: string;
-  solcexApiKey?: string;
-  x402WalletAddress?: string;
-  x402DailyBudget?: number;
-  defaultChain?: string;
-  maxResultsPerScan?: number;
-  minScoreForWalletCheck?: number;
-  minScoreForOutreach?: number;
+  minLiquidityUsd?: number;
+  minVolumeH24?: number;
+  minOverallScore?: number;
+  autoOutreach?: boolean;
+  scanIntervalMs?: number;
 }
 
-export const DEFAULT_CONFIG: SolcexPluginConfig = {
-  defaultChain: "solana",
-  maxResultsPerScan: 20,
-  minScoreForWalletCheck: 70,
-  minScoreForOutreach: 85,
-};
+export interface ScanResult {
+  tokensScanned: number;
+  tokensQualified: number;
+  prospects: BDProspect[];
+  scanTimestamp: string;
+  chain: string;
+}
+
+export interface WalletForensics {
+  address: string;
+  balanceSol?: number;
+  tokenAccounts?: number;
+  nftCount?: number;
+  transactionCount?: number;
+  firstTransaction?: string;
+  lastTransaction?: string;
+  topTokenHoldings?: Array<{
+    mint: string;
+    symbol: string;
+    amount: number;
+    valueUsd?: number;
+  }>;
+  riskFlags?: string[];
+}

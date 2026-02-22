@@ -1,47 +1,50 @@
 {
-  "name": "@elizaos/plugin-solcex-bd",
-  "version": "1.0.0",
-  "description": "SolCex Exchange BD plugin — token discovery, 100-point scoring, wallet forensics, and listing pipeline for ElizaOS agents",
+  "name": "@buzzbd/plugin-solcex-bd",
+  "version": "0.2.0",
+  "description": "Autonomous BD agent plugin for elizaOS — token discovery, scoring, wallet forensics, and listing pipeline powered by SolCex Exchange",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
-  "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
-    "clean": "rm -rf dist",
-    "prepublishOnly": "npm run build"
-  },
   "keywords": [
     "elizaos",
-    "plugin",
-    "solcex",
+    "elizaos-plugins",
+    "ai",
     "crypto",
-    "business-development",
-    "token-scoring",
-    "wallet-forensics",
-    "dexscreener",
-    "helius",
     "solana",
-    "erc-8004",
-    "x402",
-    "autonomous-agent"
+    "business-development",
+    "token-scanning",
+    "defi",
+    "agent"
   ],
-  "author": "SolCex Exchange <buzzbysolcex@gmail.com>",
+  "author": "SolCex Exchange <buzz@solcex.io>",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/buzzbysolcex/plugin-solcex-bd.git"
+    "url": "https://github.com/buzzbysolcex/plugin-buzz-solcex"
   },
-  "homepage": "https://github.com/buzzbysolcex/plugin-solcex-bd#readme",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "bun test",
+    "test:e2e": "bun test src/__tests__/e2e",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "bun run build"
+  },
   "dependencies": {
-    "@elizaos/core": "latest"
+    "@elizaos/core": "^1.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.6.0",
-    "tsup": "^8.3.0",
+    "typescript": "^5.3.0",
+    "tsup": "^8.0.0",
     "@types/node": "^20.0.0"
   },
   "peerDependencies": {
-    "@elizaos/core": ">=0.1.0"
-  }
+    "@elizaos/core": ">=1.0.0"
+  },
+  "files": [
+    "dist",
+    "images",
+    "README.md",
+    "LICENSE"
+  ]
 }

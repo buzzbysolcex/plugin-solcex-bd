@@ -1,147 +1,158 @@
-# @elizaos/plugin-solcex-bd
+# 🐝 Buzz by SolCex — elizaOS Plugin v0.2.0
 
-> SolCex Exchange Business Development plugin for ElizaOS — token discovery, 100-point scoring, wallet forensics, and listing pipeline.
+**Autonomous BD Agent for Crypto Exchange Token Listings**
 
-Built by [Buzz BD Agent](https://github.com/buzzbysolcex/buzz-bd-agent) — the autonomous BD agent for SolCex Exchange, running 24/7 on Akash Network.
+Native elizaOS plugin bringing Buzz's full 4-Layer Intelligence Architecture to the elizaOS ecosystem. 8 services, 6 actions, 2 providers — mapped directly to Buzz's production capabilities running 24/7 on Akash Network.
 
-**ERC-8004:** ETH Agent #25045 | Base Agent #17483 | Verify: [8004scan.io](https://8004scan.io)
+> **Reference:** SolCex Master Ops v5.3.8 — 3-Provider Cascade + GHCR Pipeline (Feb 22, 2026)
+> **Deployment:** `ghcr.io/buzzbysolcex/buzz-bd-agent:v5.3.8`
+> **Live:** 36 cron jobs | 16/16 intelligence sources | 3-Provider LLM Cascade
 
-## Installation
+## Architecture — 4-Layer Intelligence
 
-```bash
-bun add @elizaos/plugin-solcex-bd
-# or
-npm install @elizaos/plugin-solcex-bd
 ```
+╔═══════════════════════════════════════════════════╗
+║  LAYER 1 — CAST THE NET (Discovery)               ║
+║  DexScreener, AIXBT, Clawpump, CoinGecko, Boosts  ║
+║  → DexScreenerService                              ║
+╠═══════════════════════════════════════════════════╣
+║  LAYER 2 — FILTER (Safety & Liquidity)             ║
+║  RugCheck, Helius, Allium (16 chains), DFlow MCP   ║
+║  → ContractSafetyService, WalletForensicsService,  ║
+║    MultiChainIntelService                          ║
+╠═══════════════════════════════════════════════════╣
+║  LAYER 3 — RESEARCH (Deep Intel)                   ║
+║  Grok x_search, ATV Web3 Identity, Serper          ║
+║  → SocialIntelService                              ║
+╠═══════════════════════════════════════════════════╣
+║  LAYER 4 — SCORE & ACT (100-Point System)          ║
+║  + QuillShield safety overlay                      ║
+║  + DFlow route quality modifiers (+13/-8)          ║
+║  → TokenScoringService, BDPipelineService          ║
+╚═══════════════════════════════════════════════════╝
+```
+
+## 8 Services
+
+| # | Service | Layer | Intel Sources | Description |
+|---|---------|-------|---------------|-------------|
+| 1 | `DexScreenerService` | L1 | #1, #18 | Token discovery — profiles, pairs, boosts, trending |
+| 2 | `TokenScoringService` | L4 | All layers | 100-point scoring engine with catalyst adjustments |
+| 3 | `WalletForensicsService` | L2 | #5 Helius | Solana wallet forensics — balances, tx history, risk |
+| 4 | `ContractSafetyService` | L2 | #4 RugCheck, #16 DFlow | Honeypot detection, authority checks, LP verification, swap routes |
+| 5 | `MultiChainIntelService` | L2 | #6 Allium | 16-chain deployer PnL, cross-chain behavior tracking |
+| 6 | `SocialIntelService` | L3 | #12 ATV, #13 Grok, #14 Serper | Sentiment analysis, Web3 identity, web research |
+| 7 | `BDPipelineService` | Cross | BD lifecycle #31-36 | Prospect tracking, warm-ups, follow-ups, competitor monitoring |
+| 8 | `AgentNetworkService` | Support | #15 sub-agents, ACP, x402 | Agent-to-agent interop, micropayments, trust verification |
+
+## 6 Actions
+
+| Action | Triggers | Description |
+|--------|----------|-------------|
+| `SCAN_TOKENS` | "scan for tokens", "find listing candidates" | Discover and score token prospects from DexScreener |
+| `SCORE_TOKEN` | "score this token [address]" | Deep 100-point scoring for a specific contract |
+| `ANALYZE_WALLET` | "analyze wallet [address]" | Helius-powered Solana wallet forensics |
+| `CHECK_CONTRACT_SAFETY` | "check safety [address]", "rug check" | RugCheck + QuillShield + DFlow safety analysis |
+| `RESEARCH_PROJECT` | "research $TOKEN", "deep dive" | Grok sentiment + ATV identity + Serper web research |
+| `CHECK_PIPELINE` | "show pipeline", "BD status" | Pipeline stats, hot prospects, follow-up queue |
+
+## 2 Providers
+
+| Provider | Description |
+|----------|-------------|
+| `buzz-market-intel` | Injects real-time trending token data into agent context |
+| `buzz-bd-pipeline` | SolCex listing package ($15K USDT), Buzz identity, pipeline context |
 
 ## Quick Start
 
-```typescript
-import { AgentRuntime } from "@elizaos/core";
-import { solcexBdPlugin } from "@elizaos/plugin-solcex-bd";
+```bash
+bun add @buzzbysolcex/plugin-buzz-solcex
+```
 
-const runtime = new AgentRuntime({
-  character: {
-    name: "MyBDAgent",
-    bio: "I help discover and evaluate tokens for exchange listings.",
-    plugins: ["@elizaos/plugin-solcex-bd"],
-    settings: {
-      secrets: {
-        HELIUS_API_KEY: "your_helius_key", // Required for wallet forensics
-        // Optional: Connect to SolCex API for enriched intel
-        // SOLCEX_API_URL: "https://buzz.solcex.io/api",
-        // SOLCEX_API_KEY: "your_key",
-      },
-    },
+### Agent Configuration
+
+```typescript
+import { buzzSolcexPlugin } from '@buzzbysolcex/plugin-buzz-solcex';
+
+const agent = {
+  name: 'MyAgent',
+  plugins: [buzzSolcexPlugin],
+  settings: {
+    HELIUS_API_KEY: 'your-helius-key',
+    ALLIUM_API_KEY: 'your-allium-key',
+    GROK_API_KEY: 'your-xai-key',
+    ATV_API_KEY: 'your-atv-key',
+    SERPER_API_KEY: 'your-serper-key',
+    BUZZ_MIN_LIQUIDITY: '10000',
+    BUZZ_MIN_VOLUME_24H: '5000',
+    BUZZ_MIN_SCORE: '60',
   },
-  plugins: [solcexBdPlugin],
-});
-
-await runtime.initialize();
+};
 ```
 
-## Actions
+## Scoring System (Master Ops v5.3.8)
 
-### SCAN_TOKENS
-Discover high-potential tokens across DEXs.
+### Base Metrics (100 points)
 
-```
-"Scan for promising tokens on Solana"
-"Find trending tokens with good liquidity"
-"What new tokens are worth looking at?"
-```
+| Metric | Points | Full Score |
+|--------|--------|-----------|
+| Liquidity | 30 | $500K+ |
+| Volume (24h) | 25 | $1M+ |
+| Age | 15 | 7-30 days |
+| Community | 15 | Active socials |
+| Contract Safety | 15 | Audited, no flags |
 
-Returns: Top 10 tokens scored by the 100-point system, with chain, liquidity, market cap, and recommendations.
+### Score Thresholds
 
-### SCORE_TOKEN
-Deep-score a specific token by contract address.
+| Score | Label | Action |
+|-------|-------|--------|
+| 85-100 | 🔥 HOT | Immediate outreach + forensics |
+| 70-84 | ✅ QUALIFIED | Priority queue + forensics |
+| 50-69 | 👀 WATCH | Monitor 48h |
+| 0-49 | ❌ SKIP | No action |
 
-```
-"Score this token: 7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU"
-"Evaluate 0x1234...5678 on Base"
-```
+### DFlow Route Modifiers: max +13 / min -8 pts
 
-Returns: Full 6-factor breakdown (liquidity 25%, market cap 20%, volume 20%, social 15%, age 10%, team 10%) plus catalyst adjustments.
+## LLM Cascade (Master Ops v5.3.8)
 
-### CHECK_WALLET
-Run deployer wallet forensics via Helius API (Solana only).
+| Priority | Model | Provider | Format | Cost |
+|----------|-------|----------|--------|------|
+| PRIMARY | MiniMax M2.5 (229B) | MiniMax Direct | `anthropic-messages` | ~$41/mo |
+| FREE 1 | Llama 3.3 70B | OpenRouter | openai | $0 |
+| FREE 2 | Qwen3 30B-A3B | AkashML | openai | $0 |
 
-```
-"Check the deployer wallet for DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"
-"Is this token safe? Run wallet forensics"
-```
+**Key v5.3.8 fix:** MiniMax API switched from `openai-completions` to `anthropic-messages` format, resolving empty `tool_call_id` errors.
 
-Returns: Funding source, balances, transaction patterns, flags (VERIFIED/INSTITUTIONAL/SERIAL_CREATOR/DUMP_ALERT/MIXER_REJECT), risk level, and adjusted score.
+## Environment Variables
 
-**Requires:** `HELIUS_API_KEY` — get one free at [helius.dev](https://helius.dev)
+| Variable | Required | Service |
+|----------|----------|---------|
+| `HELIUS_API_KEY` | No | WalletForensics |
+| `ALLIUM_API_KEY` | No | MultiChainIntel |
+| `GROK_API_KEY` / `XAI_API_KEY` | No | SocialIntel |
+| `ATV_API_KEY` | No | SocialIntel |
+| `SERPER_API_KEY` | No | SocialIntel |
 
-### SUBMIT_LISTING_INQUIRY
-Submit a qualified token (70+ score) to SolCex for listing review.
+> DexScreener + RugCheck always available (free, no key).
 
-```
-"Submit a listing inquiry for BONK to SolCex"
-"Send this token to SolCex for listing review"
-```
+## Development
 
-All inquiries are **queued for human review** — never auto-sent.
-
-## Scoring System
-
-| Factor | Weight | Scoring Tiers |
-|--------|--------|---------------|
-| Liquidity | 25% | >$500K excellent, >$200K good, >$100K minimum |
-| Market Cap | 20% | >$10M strong, >$1M good, >$500K acceptable |
-| Volume 24h | 20% | >$1M excellent, >$500K good, >$100K moderate |
-| Social | 15% | 4+ platforms strong, 2+ moderate, 1 minimal |
-| Age | 10% | >180d established, >30d moderate, <7d risky |
-| Team | 10% | Website + socials = transparent |
-
-**Catalysts** adjust the base score: volume momentum (+5), buy pressure (+3), multi-platform (+5), price dump (-10), sell pressure (-5).
-
-**Wallet Forensics** further adjust: verified (+3), institutional (+8), net positive (+2), serial creator (-5), dump alert (-10 to -15), mixer funded (AUTO-REJECT).
-
-| Score | Action |
-|-------|--------|
-| 85-100 | 🔥 HOT — Immediate outreach |
-| 70-84 | ✅ QUALIFIED — Priority queue |
-| 50-69 | 👀 WATCH — Monitor 48 hours |
-| 0-49 | ⏭️ SKIP — Log only |
-
-## Configuration
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `HELIUS_API_KEY` | For CHECK_WALLET | Helius API key for Solana wallet forensics |
-| `SOLCEX_API_URL` | Optional | SolCex API endpoint for enriched intel and listing submission |
-| `SOLCEX_API_KEY` | Optional | SolCex API authentication key |
-
-## Direct Service Usage
-
-You can also use the services directly without ElizaOS:
-
-```typescript
-import { searchTokens, scoreToken, analyzeWallet } from "@elizaos/plugin-solcex-bd";
-
-// Search tokens
-const pairs = await searchTokens("BONK");
-
-// Score a pair
-const score = scoreToken(pairs[0]);
-console.log(`${score.tokenSymbol}: ${score.totalScore}/100`);
-
-// Wallet forensics
-const wallet = await analyzeWallet("DeployerAddress...", "your_helius_key");
-console.log(wallet.summary);
+```bash
+git clone https://github.com/buzzbysolcex/plugin-buzz-solcex
+cd plugin-buzz-solcex
+bun install && bun run build
 ```
 
 ## About
 
-**Buzz BD Agent** is an autonomous business development agent for SolCex Exchange, built by Ogie and Claude Opus 4.6. Running 24/7 on Akash Network with 15 intelligence sources, 29 cron jobs, and dual-chain ERC-8004 identity.
-
-- GitHub: [buzzbysolcex/buzz-bd-agent](https://github.com/buzzbysolcex/buzz-bd-agent)
-- Twitter: [@BuzzBySolCex](https://twitter.com/BuzzBySolCex)
-- ERC-8004: ETH #25045 | Base #17483
-- Live: [retake.tv/BuzzBD](https://retake.tv/BuzzBD)
+| Field | Value |
+|-------|-------|
+| Exchange | [SolCex](https://solcex.io) |
+| ERC-8004 | Ethereum #25045 \| Base #17483 |
+| Docker | `ghcr.io/buzzbysolcex/buzz-bd-agent:v5.3.8` |
+| npm | `@buzzbd/plugin-solcex-bd@1.0.0` |
+| Registry PR | elizaos-plugins/registry #263 |
+| Twitter | [@BuzzBySolCex](https://twitter.com/BuzzBySolCex) |
 
 ## License
 

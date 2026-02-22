@@ -1,61 +1,51 @@
-import type { Provider, IAgentRuntime, Memory, State } from "@elizaos/core";
-import { getTrendingTokens } from "../services/dexscreener.js";
+/**
+ * Buzz by SolCex — Market Intelligence Provider
+ * Provides real-time market context to the agent's decision-making
+ */
+
+import type { Provider, IAgentRuntime, Memory, State } from '@elizaos/core';
+import { DexScreenerService } from '../services/dexscreener.js';
 
 export const marketIntelProvider: Provider = {
-  get: async (
-    runtime: IAgentRuntime,
-    _message: Memory,
-    _state?: State
-  ): Promise<string> => {
+  name: 'buzz-market-intel',
+  description: 'Provides real-time trending token data and market intelligence from DexScreener for Buzz BD decisions',
+
+  get: async (runtime: IAgentRuntime, message: Memory, state?: State) => {
     try {
-      // Try Buzz API first for enriched intel
-      const apiUrl = runtime.getSetting("SOLCEX_API_URL");
-      const apiKey = runtime.getSetting("SOLCEX_API_KEY");
+      const dexService = await DexScreenerService.start(runtime);
 
-      if (apiUrl && apiKey) {
-        try {
-          const resp = await fetch(`${apiUrl}/market-intel`, {
-            headers: { "X-SolCex-API-Key": apiKey },
-          });
+      // Fetch trending/boosted tokens
+      const boosted = await dexService.getBoostedTokens();
 
-          if (resp.ok) {
-            const data = await resp.json();
-            const trending = (data.trending || [])
-              .slice(0, 5)
-              .map((t: any) => `${t.symbol} (${t.chain}, score: ${t.score})`)
-              .join(", ");
+      const trendingSummary = boosted.slice(0, 5).map(t => ({
+        symbol: t.symbol || 'N/A',
+        name: t.name || 'Unknown',
+        chain: t.chainId || 'unknown',
+        address: t.address,
+      }));
 
-            return (
-              `Market Intelligence (SolCex BD):\n` +
-              `  Trending: ${trending || "None"}\n` +
-              `  Volume spikes: ${(data.volumeSpikes || []).length} tokens\n` +
-              `  New launches (24h): ${(data.newLaunches || []).length}\n` +
-              `  Pipeline: ${data.pipelineCount || 0} tokens tracked`
-            );
-          }
-        } catch {
-          // Fall through to DexScreener
-        }
-      }
+      const text = trendingSummary.length > 0
+        ? `Current trending tokens on DexScreener: ${trendingSummary.map(t => `${t.symbol} (${t.chain})`).join(', ')}`
+        : 'No trending token data available at this time.';
 
-      // Fallback: DexScreener trending only
-      const trending = await getTrendingTokens();
-      const top5 = trending
-        .slice(0, 5)
-        .map(
-          (p) =>
-            `${p.baseToken.symbol} (${p.chainId}, liq: $${(p.liquidity?.usd ?? 0).toLocaleString()})`
-        )
-        .join(", ");
-
-      return (
-        `Market Intelligence (DexScreener):\n` +
-        `  Trending tokens: ${top5 || "No data"}\n` +
-        `  Source: DexScreener latest profiles\n` +
-        `  Note: Connect SOLCEX_API for enriched multi-source intel`
-      );
-    } catch {
-      return "Market intelligence temporarily unavailable.";
+      return {
+        text,
+        data: {
+          trendingTokens: trendingSummary,
+          fetchedAt: new Date().toISOString(),
+          source: 'DexScreener',
+        },
+        values: {
+          trendingCount: String(trendingSummary.length),
+        },
+      };
+    } catch (error) {
+      console.error('[Buzz/Provider] Market intel fetch failed:', error);
+      return {
+        text: 'Market intelligence temporarily unavailable.',
+        data: { error: String(error) },
+        values: {},
+      };
     }
   },
 };
